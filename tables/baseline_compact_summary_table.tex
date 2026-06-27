@@ -1,0 +1,18 @@
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{rrrrrr}
+\hline\hline
+\(P\) & CosThr & L1Thr & L2Thr & LogReg & Best baseline \\
+\hline
+10 & 0.5144 & 0.5098 & 0.5098 & 0.5288 & LogReg \\
+40 & 0.5594 & 0.5148 & 0.5218 & 0.5453 & CosThr \\
+100 & 0.6708 & 0.5141 & 0.5165 & 0.6388 & CosThr \\
+200 & 0.7467 & 0.5162 & 0.5223 & 0.7210 & CosThr \\
+300 & 0.7644 & 0.5120 & 0.5223 & 0.7604 & CosThr \\
+600 & 0.8051 & 0.5057 & 0.5317 & 0.8216 & LogReg \\
+\hline\hline
+\end{tabular}
+\caption{Compact baseline summary. Entries are best mean OOD accuracies over preprocessing choices for each model and truncation length. Full baseline results over all \(P\), preprocessing choices, and metrics are reported in Appendix~\ref{app:full-baseline-results}.}
+\label{tab:baseline-main}
+\end{table}

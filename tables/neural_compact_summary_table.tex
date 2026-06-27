@@ -1,0 +1,18 @@
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{rrrrr}
+\hline\hline
+\(P\) & Best baseline OOD & Best nonlinear/neural OOD & Model / preproc. & Gap \\
+\hline
+10 & 0.5288 & 0.5400 & Transformer / log1p & +0.0112 \\
+40 & 0.5594 & 0.6233 & RandomForest / z-score & +0.0639 \\
+100 & 0.6708 & 0.7120 & MLP / raw & +0.0412 \\
+200 & 0.7467 & 0.7870 & MLP / raw & +0.0403 \\
+300 & 0.7644 & 0.8204 & MLP / raw & +0.0561 \\
+600 & 0.8216 & 0.8629 & MLP / log1p & +0.0413 \\
+\hline\hline
+\end{tabular}
+\caption{Compact nonlinear/neural summary. Entries are best mean OOD accuracies over preprocessing choices. The gap is relative to the best baseline at the same truncation length. Full nonlinear/neural results are reported in Appendix~\ref{app:full-neural-results}.}
+\label{tab:neural-main}
+\end{table}

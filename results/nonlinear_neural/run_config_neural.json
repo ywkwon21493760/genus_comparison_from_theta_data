@@ -1,0 +1,113 @@
+{
+  "script": "run_nonlinear_neural.py",
+  "task": "pairwise genus comparison from truncated theta-series coefficients",
+  "seeds": [
+    42,
+    43,
+    44,
+    45,
+    46
+  ],
+  "p_list": [
+    10,
+    20,
+    30,
+    40,
+    50,
+    60,
+    70,
+    80,
+    90,
+    100,
+    110,
+    120,
+    130,
+    140,
+    150,
+    200,
+    300,
+    400,
+    500,
+    600
+  ],
+  "max_p": 600,
+  "id_abs_disc_range": [
+    4,
+    4000
+  ],
+  "ood_abs_disc_range": [
+    4001,
+    8000
+  ],
+  "id_form_test_size": 0.3,
+  "pair_budgets": {
+    "id_train": {
+      "same_D_same_genus": 10000,
+      "same_D_diff_genus": 5000,
+      "diff_D": 5000
+    },
+    "id_test": {
+      "same_D_same_genus": 5000,
+      "same_D_diff_genus": 2500,
+      "diff_D": 2500
+    },
+    "ood_test": {
+      "same_D_same_genus": 5000,
+      "same_D_diff_genus": 2500,
+      "diff_D": 2500
+    }
+  },
+  "normalization_modes": [
+    "raw",
+    "log1p",
+    "zscore"
+  ],
+  "zscore_fit_on_all_train_forms": false,
+  "zscore_default_fit_scope": "forms appearing in sampled ID training pairs",
+  "cache_dir": "fast_cache_theta",
+  "use_disk_cache": true,
+  "device": "cpu",
+  "run_transformer": true,
+  "models": [
+    "DecisionTree",
+    "RandomForest",
+    "MLP",
+    "Transformer"
+  ],
+  "decision_tree": {
+    "max_depth": 25
+  },
+  "random_forest": {
+    "n_estimators": 200,
+    "n_jobs": -1
+  },
+  "mlp": {
+    "hidden_layer_sizes": [
+      512,
+      256
+    ],
+    "max_iter": 250,
+    "early_stopping": true,
+    "validation_fraction": 0.1,
+    "n_iter_no_change": 10
+  },
+  "transformer": {
+    "d_model": 48,
+    "nhead": 4,
+    "num_layers": 1,
+    "ff_dim": 96,
+    "lr": 0.001,
+    "batch_size": 128,
+    "max_epochs_by_p": {
+      "400": 15,
+      "500": 18,
+      "600": 20
+    },
+    "patience": 3,
+    "min_epochs": 6
+  },
+  "outputs": {
+    "per_seed": "results_neural_per_seed.csv",
+    "summary": "results_neural_summary_mean_std.csv"
+  }
+}

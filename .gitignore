@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# macOS
+.DS_Store
+
+# Local smoke-test outputs
+results/smoke_baseline/
+results/smoke_neural/
+
+# Temporary candidate outputs
+figures_neural_official_candidate/
+tables_neural_official_candidate/
+
+# Large theta-cache matrices: keep out of regular GitHub.
+# These files can be regenerated, and may be included in the Zenodo archive.
+fast_cache_theta/*.npy
+cache/**/*.npy
+data/**/*.npy
+
+# Large compressed numerical artifacts, if generated locally.
+cache/**/*.npz
+data/**/*.npz
+
+# Local editor / notebook checkpoints
+.ipynb_checkpoints/
+
+# Local provenance backups not included in the public reproducibility release
+_local_legacy/
