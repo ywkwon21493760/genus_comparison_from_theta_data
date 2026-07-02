@@ -30,3 +30,6 @@ data/**/*.npz
 
 # Local provenance backups not included in the public reproducibility release
 _local_legacy/
+
+# Local backup created before figure accessibility update
+_backup_before_figure_accessibility_update/

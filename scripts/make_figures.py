@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-r"""
-Generate manuscript-format figures from archived summary CSV files.
+"""
+Regenerate manuscript figures from summary CSV files.
 
-This script preserves the figure file names used by the current manuscript:
+This script generates the figure files used in the manuscript:
+
   figures/baseline_ood_acc_by_preprocessing.pdf
   figures/neural_ood_acc_by_preprocessing.pdf
   figures/baseline_id_acc_by_preprocessing.pdf
@@ -10,7 +11,9 @@ This script preserves the figure file names used by the current manuscript:
   figures/neural_id_acc_by_preprocessing.pdf
   figures/neural_ood_auroc_by_preprocessing.pdf
 
-Each figure is a three-panel plot for raw, log1p, and z-score preprocessing.
+The plots use both line styles and markers, in addition to color, so that
+curves remain distinguishable in grayscale and for readers with color-vision
+deficiencies. Panels are labelled (a), (b), and (c).
 """
 
 from __future__ import annotations
@@ -18,16 +21,31 @@ from __future__ import annotations
 import argparse
 import csv
 from pathlib import Path
-from typing import Dict, Iterable, List
+from typing import Dict, Iterable, List, Tuple
+
+import matplotlib as mpl
+
+# Avoid Type 3 fonts in PDF output where possible.
+mpl.rcParams["pdf.fonttype"] = 42
+mpl.rcParams["ps.fonttype"] = 42
+mpl.rcParams["font.family"] = "sans-serif"
+mpl.rcParams["font.sans-serif"] = ["Helvetica", "Arial", "DejaVu Sans"]
+mpl.rcParams["axes.unicode_minus"] = False
 
 import matplotlib.pyplot as plt
 
-BASELINE_MODELS = ["CosThr", "L1Thr", "L2Thr", "LogReg"]
-NEURAL_MODELS = ["DecisionTree", "RandomForest", "MLP", "Transformer"]
-NORM_ORDER = ["raw", "log1p", "zscore"]
-NORM_TITLE = {"raw": "raw", "log1p": "log1p", "zscore": "z-score"}
 
-BASELINE_MODEL_DISPLAY = {
+P_ORDER = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100,
+           110, 120, 130, 140, 150, 200, 300, 400, 500, 600]
+
+NORM_ORDER = ["raw", "log1p", "zscore"]
+PANEL_TITLES = {
+    "raw": "(a) raw",
+    "log1p": "(b) log1p",
+    "zscore": "(c) z-score",
+}
+
+BASELINE_MODEL_MAP = {
     "Baseline_CosThresh": "CosThr",
     "Baseline_L1Thresh": "L1Thr",
     "Baseline_L2Thresh": "L2Thr",
@@ -41,7 +59,7 @@ BASELINE_MODEL_DISPLAY = {
     "LogReg": "LogReg",
 }
 
-NEURAL_MODEL_DISPLAY = {
+NEURAL_MODEL_MAP = {
     "DecisionTree": "DecisionTree",
     "RandomForest": "RandomForest",
     "MLP": "MLP",
@@ -52,184 +70,246 @@ NEURAL_MODEL_DISPLAY = {
     "Neural_Transformer": "Transformer",
 }
 
+NORM_MAP = {
+    "raw": "raw",
+    "log1p": "log1p",
+    "zscore": "zscore",
+    "z-score": "zscore",
+    "z_score": "zscore",
+}
+
+STYLE_MAP = {
+    0: {"linestyle": "-",  "marker": "o"},
+    1: {"linestyle": "--", "marker": "s"},
+    2: {"linestyle": "-.", "marker": "^"},
+    3: {"linestyle": ":",  "marker": "D"},
+}
+
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Generate manuscript-format figures.")
+    parser = argparse.ArgumentParser(
+        description="Regenerate manuscript figures from summary CSV files."
+    )
     parser.add_argument(
         "--baseline-summary",
-        default="results/baseline/results_baselines_summary_mean_std.csv",
+        type=Path,
+        default=Path("results/baseline/results_baselines_summary_mean_std.csv"),
         help="Baseline summary CSV.",
     )
     parser.add_argument(
         "--neural-summary",
-        default="results/nonlinear_neural/results_neural_summary_mean_std.csv",
+        type=Path,
+        default=Path("results/nonlinear_neural/results_neural_summary_mean_std.csv"),
         help="Nonlinear/neural summary CSV.",
     )
-    parser.add_argument("--outdir", default="figures", help="Output directory for figures.")
+    parser.add_argument(
+        "--outdir",
+        type=Path,
+        default=Path("figures"),
+        help="Output directory for generated figures.",
+    )
     parser.add_argument(
         "--formats",
         nargs="+",
         default=["pdf"],
         choices=["pdf", "png"],
-        help="Output formats to write.",
+        help="Output formats.",
     )
     return parser.parse_args()
 
 
-def canonical_norm(x: str) -> str:
-    x = str(x).strip()
-    if x in {"z-score", "z_score"}:
-        return "zscore"
-    return x
-
-
-def read_rows(path: str | Path, model_map: Dict[str, str]) -> List[dict]:
-    path = Path(path)
+def read_summary(path: Path, model_map: Dict[str, str]) -> List[dict]:
     if not path.exists():
-        raise FileNotFoundError(path)
+        raise FileNotFoundError(f"Summary CSV not found: {path}")
+
     rows: List[dict] = []
-    with path.open(newline="", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        required = {"P", "norm", "model", "id_acc_mean", "ood_acc_mean", "ood_auroc_mean"}
+    with path.open(newline="", encoding="utf-8") as handle:
+        reader = csv.DictReader(handle)
+        required = {
+            "P", "norm", "model",
+            "id_acc_mean", "ood_acc_mean", "ood_auroc_mean",
+        }
         missing = required - set(reader.fieldnames or [])
         if missing:
-            raise ValueError(f"{path} is missing columns: {sorted(missing)}")
+            raise ValueError(f"{path} is missing required columns: {sorted(missing)}")
+
         for row in reader:
-            r = dict(row)
-            r["P"] = int(float(r["P"]))
-            r["norm"] = canonical_norm(r["norm"])
-            r["model"] = model_map.get(r["model"].strip(), r["model"].strip())
-            for key in ["id_acc_mean", "ood_acc_mean", "ood_auroc_mean"]:
-                r[key] = float(r[key])
-            rows.append(r)
+            model = model_map.get(row["model"].strip(), row["model"].strip())
+            norm = NORM_MAP.get(row["norm"].strip(), row["norm"].strip())
+
+            rows.append({
+                "P": int(float(row["P"])),
+                "norm": norm,
+                "model": model,
+                "id_acc_mean": float(row["id_acc_mean"]),
+                "ood_acc_mean": float(row["ood_acc_mean"]),
+                "ood_auroc_mean": float(row["ood_auroc_mean"]),
+            })
+
     return rows
 
 
-def subset(rows: Iterable[dict], norm: str, model: str) -> List[dict]:
-    out = [r for r in rows if r["norm"] == norm and r["model"] == model]
-    return sorted(out, key=lambda r: r["P"])
-
-
-def make_three_panel(
+def series_for(
     rows: List[dict],
-    models: List[str],
+    *,
+    norm: str,
+    model: str,
+    metric: str,
+) -> Tuple[List[int], List[float]]:
+    selected = [
+        row for row in rows
+        if row["norm"] == norm and row["model"] == model
+    ]
+    selected.sort(key=lambda r: P_ORDER.index(r["P"]) if r["P"] in P_ORDER else r["P"])
+
+    xs = [row["P"] for row in selected]
+    ys = [row[metric] for row in selected]
+    return xs, ys
+
+
+def plot_by_preprocessing(
+    rows: List[dict],
+    *,
+    model_order: List[str],
     metric: str,
     ylabel: str,
+    output_stem: str,
     outdir: Path,
-    basename: str,
-    formats: List[str],
-    ylim: tuple[float, float] | None = None,
-    chance_line: bool = False,
+    formats: Iterable[str],
 ) -> None:
-    # Figure size and layout are chosen to match the compact manuscript plots.
-    fig, axes = plt.subplots(1, 3, figsize=(7.2, 2.15), sharey=True)
+    fig, axes = plt.subplots(
+        1, 3,
+        figsize=(10.8, 3.2),
+        sharey=True,
+        constrained_layout=False,
+    )
 
     handles = []
     labels = []
+
     for ax, norm in zip(axes, NORM_ORDER):
-        for model in models:
-            data = subset(rows, norm, model)
-            if not data:
+        ax.set_title(PANEL_TITLES[norm], fontsize=10)
+
+        for idx, model in enumerate(model_order):
+            xs, ys = series_for(rows, norm=norm, model=model, metric=metric)
+            if not xs:
                 continue
-            xs = [r["P"] for r in data]
-            ys = [r[metric] for r in data]
-            line, = ax.plot(xs, ys, marker="o", markersize=1.8, linewidth=0.85, label=model)
+
+            style = STYLE_MAP[idx % len(STYLE_MAP)]
+            line, = ax.plot(
+                xs,
+                ys,
+                label=model,
+                linewidth=1.7,
+                markersize=4.2,
+                markerfacecolor="white",
+                markeredgewidth=1.0,
+                **style,
+            )
+
             if norm == NORM_ORDER[0]:
                 handles.append(line)
                 labels.append(model)
-        ax.set_title(NORM_TITLE[norm], fontsize=6.5)
-        ax.set_xlabel(r"$P$", fontsize=6.5)
-        ax.grid(axis="y", linewidth=0.4, alpha=0.7)
-        ax.tick_params(axis="both", labelsize=5.8)
-        ax.set_xlim(0, 610)
-        if chance_line:
-            ax.axhline(0.5, linestyle="--", linewidth=0.8, alpha=0.8)
-        if ylim is not None:
-            ax.set_ylim(*ylim)
-    axes[0].set_ylabel(ylabel, fontsize=6.5)
-    fig.legend(handles, labels, loc="upper center", ncol=len(models), frameon=False, fontsize=5.5, bbox_to_anchor=(0.5, 1.01))
-    fig.subplots_adjust(left=0.075, right=0.995, bottom=0.20, top=0.80, wspace=0.06)
+
+        ax.set_xlabel(r"Prefix length $P$")
+        ax.set_xticks([10, 100, 200, 300, 400, 500, 600])
+        ax.tick_params(axis="both", labelsize=8)
+        ax.grid(True, linewidth=0.4, alpha=0.45)
+
+    axes[0].set_ylabel(ylabel, fontsize=9)
+
+    if handles:
+        fig.legend(
+            handles,
+            labels,
+            loc="upper center",
+            bbox_to_anchor=(0.5, 0.99),
+            ncol=len(labels),
+            frameon=False,
+            fontsize=8.5,
+            handlelength=2.6,
+            columnspacing=1.2,
+        )
+
+    fig.subplots_adjust(left=0.075, right=0.99, bottom=0.22, top=0.78, wspace=0.20)
 
     outdir.mkdir(parents=True, exist_ok=True)
-    for ext in formats:
-        path = outdir / f"{basename}.{ext}"
-        fig.savefig(path, bbox_inches="tight", dpi=300)
+    for fmt in formats:
+        out_path = outdir / f"{output_stem}.{fmt}"
+        fig.savefig(out_path, bbox_inches="tight")
+        print(f"[wrote] {out_path}")
+
     plt.close(fig)
 
 
 def main() -> None:
     args = parse_args()
-    outdir = Path(args.outdir)
-    baseline_rows = read_rows(args.baseline_summary, BASELINE_MODEL_DISPLAY)
-    neural_rows = read_rows(args.neural_summary, NEURAL_MODEL_DISPLAY)
 
-    make_three_panel(
+    baseline_rows = read_summary(args.baseline_summary, BASELINE_MODEL_MAP)
+    neural_rows = read_summary(args.neural_summary, NEURAL_MODEL_MAP)
+
+    baseline_models = ["CosThr", "L1Thr", "L2Thr", "LogReg"]
+    neural_models = ["DecisionTree", "RandomForest", "MLP", "Transformer"]
+
+    plot_by_preprocessing(
         baseline_rows,
-        BASELINE_MODELS,
+        model_order=baseline_models,
         metric="ood_acc_mean",
-        ylabel="OOD accuracy",
-        outdir=outdir,
-        basename="baseline_ood_acc_by_preprocessing",
+        ylabel="Out-of-distribution (OOD) accuracy",
+        output_stem="baseline_ood_acc_by_preprocessing",
+        outdir=args.outdir,
         formats=args.formats,
-        ylim=(0.45, 0.85),
-        chance_line=True,
     )
-    make_three_panel(
+
+    plot_by_preprocessing(
         neural_rows,
-        NEURAL_MODELS,
+        model_order=neural_models,
         metric="ood_acc_mean",
-        ylabel="OOD accuracy",
-        outdir=outdir,
-        basename="neural_ood_acc_by_preprocessing",
+        ylabel="Out-of-distribution (OOD) accuracy",
+        output_stem="neural_ood_acc_by_preprocessing",
+        outdir=args.outdir,
         formats=args.formats,
-        ylim=(0.48, 1.0),
-        chance_line=True,
     )
-    make_three_panel(
+
+    plot_by_preprocessing(
         baseline_rows,
-        BASELINE_MODELS,
+        model_order=baseline_models,
         metric="id_acc_mean",
-        ylabel="ID accuracy",
-        outdir=outdir,
-        basename="baseline_id_acc_by_preprocessing",
+        ylabel="In-distribution (ID) accuracy",
+        output_stem="baseline_id_acc_by_preprocessing",
+        outdir=args.outdir,
         formats=args.formats,
-        ylim=(0.48, 0.95),
-        chance_line=False,
     )
-    make_three_panel(
+
+    plot_by_preprocessing(
         baseline_rows,
-        BASELINE_MODELS,
+        model_order=baseline_models,
         metric="ood_auroc_mean",
         ylabel="OOD AUROC",
-        outdir=outdir,
-        basename="baseline_ood_auroc_by_preprocessing",
+        output_stem="baseline_ood_auroc_by_preprocessing",
+        outdir=args.outdir,
         formats=args.formats,
-        ylim=(0.0, 1.0),
-        chance_line=False,
     )
-    make_three_panel(
+
+    plot_by_preprocessing(
         neural_rows,
-        NEURAL_MODELS,
+        model_order=neural_models,
         metric="id_acc_mean",
-        ylabel="ID accuracy",
-        outdir=outdir,
-        basename="neural_id_acc_by_preprocessing",
+        ylabel="In-distribution (ID) accuracy",
+        output_stem="neural_id_acc_by_preprocessing",
+        outdir=args.outdir,
         formats=args.formats,
-        ylim=(0.55, 1.0),
-        chance_line=False,
     )
-    make_three_panel(
+
+    plot_by_preprocessing(
         neural_rows,
-        NEURAL_MODELS,
+        model_order=neural_models,
         metric="ood_auroc_mean",
         ylabel="OOD AUROC",
-        outdir=outdir,
-        basename="neural_ood_auroc_by_preprocessing",
+        output_stem="neural_ood_auroc_by_preprocessing",
+        outdir=args.outdir,
         formats=args.formats,
-        ylim=(0.45, 0.85),
-        chance_line=False,
     )
-    print(f"Wrote manuscript-format figures to {outdir}")
 
 
 if __name__ == "__main__":
