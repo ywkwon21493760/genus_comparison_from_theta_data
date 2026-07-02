@@ -187,7 +187,7 @@ Copyright (c) 2026 Dohoon Choi, Yeong-Wook Kwon and Subong Lim.
 
 The archived release is available on Zenodo:
 
-DOI: 10.5281/zenodo.21009330
+DOI: 10.5281/zenodo.21130681
 
 If you use this benchmark or code, please cite the manuscript and the archived
 software release. The Zenodo DOI is listed above and in `CITATION.cff`.
